@@ -174,13 +174,15 @@ class AsyncpgBroker(AsyncBroker):
                 message_data = message_row["message"].encode()
 
                 async def ack(*, _message_id: int = message_id) -> None:
-                    if self.read_conn is None:
+                    if self.write_pool is None:
                         raise ValueError("Call startup before starting listening.")
+
                     # Delete the message from the database
-                    await self.read_conn.execute(
-                        DELETE_MESSAGE_QUERY.format(self.table_name),
-                        _message_id,
-                    )
+                    async with self.write_pool.acquire() as conn:
+                        await conn.execute(
+                            DELETE_MESSAGE_QUERY.format(self.table_name),
+                            _message_id,
+                        )
 
                 yield AckableMessage(data=message_data, ack=ack)
             except Exception as e:
